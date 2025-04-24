@@ -1,11 +1,32 @@
 {
   "name": "happy_refact",
   "version": "0.1.0",
-  "description": "Maps all classes, methods etc.",
-  "private": true,
+  "private": false,
+  "publishConfig": {
+    "access": "public"
+  },
+  "description": "This MCP server provides the `show_impacted_code` tool to predict the impact of changes to code elements (methods, functions, classes, etc.) when modifying any function or method signature. Instruct AI agent to invoke this tool to identify which files and elements will be impacted",
+  "keywords": [
+    "MCP",
+    "Refactoring"
+  ],
+  "homepage": "https://github.com/Fredrik-C/happy_refact#readme",
+  "bugs": {
+    "url": "https://github.com/Fredrik-C/happy_refact/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Fredrik-C/happy_refact.git"
+  },
+  "license": "MIT",
+  "author": "Fredrik Claesson",
   "type": "module",
+  "main": "index.js",
   "bin": {
-    "happy_refact": "./build/index.js"
+    "happy_refact": "build/index.js"
+  },
+  "directories": {
+    "test": "test"
   },
   "files": [
     "build"
