@@ -51,71 +51,21 @@ This script runs the test client against the built MCP server (`build/index.js`)
 
 ## Installation
 
-There are several ways to run the `happy_refact` MCP server and configure it with an MCP client (like Claude Desktop).
-
-### Using `uvx` 
-
-If your MCP client supports `uvx` and project-specific `mcp.json` configuration, this is the recommended approach.
-
-Ensure you have `uvx` installed and configured for your client.
-
-```json
-{
-  "servers": {
-    "happy_refact": {
-      "command": "npx happy_refact"
-    }
-  }
-}
-```
-
-This configuration tells `uvx` to execute the `happy_refact` command using `npx`, which will find the installed package in your project's `node_modules` or fall back to a global installation if necessary.
-
-### Global npm Installation
-
-You can install the package globally and configure your client to use the global command.
-
-1. Install the package globally using npm:
-
-```bash
-npm install -g happy_refact
-```
-
-2. Configure your MCP client to use the globally installed `happy_refact` command. For Claude Desktop, add the following to your `claude_desktop_config.json` file:
-
-On MacOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
+I have not managed to get a publish version working, so for now you must download and build the source, then register:
 
 ```json
 {
   "mcpServers": {
     "happy_refact": {
-      "command": "happy_refact"
+      "command": "node",
+      "args": [
+        "path/build/index.js"
+      ]
     }
   }
 }
 ```
-
-### Direct Execution
-
-You can also configure your client to directly execute the built server file.
-
-1. Build the server (see Development section).
-2. Configure your MCP client to use the path to the built file. For Claude Desktop, add the following to your `claude_desktop_config.json` file:
-
-On MacOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
-On Windows: `%APPDATA%/Claude/claude_desktop_config.json`
-
-```json
-{
-  "mcpServers": {
-    "happy_refact": {
-      "command": "/path/to/your/project/build/index.js"
-    }
-  }
-}
-```
-Replace `/path/to/your/project` with the actual path to your project directory.
+Replace `path/build/` with the actual path to your project directory.
 
 ### Debugging
 

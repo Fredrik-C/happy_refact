@@ -1,6 +1,6 @@
 {
   "name": "happy_refact",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -38,7 +38,8 @@
     "test:mcp-client": "node build/run_mcp_test_client.js"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.10.2"
+    "@modelcontextprotocol/sdk": "^1.10.2",
+    "happy_refact": "^0.1.1"
   },
   "devDependencies": {
     "@types/jest": "^29.5.14",
