@@ -17,6 +17,8 @@ Example instruction: `BEFORE making any change to signature of a method/function
 
 ## Installation/Use
 
+Currently supports C#, Python and Typescript
+
 To use this tool in IDEs like Claude, Cline, Cursor etc you add an MCP Server entry:
 
 ```json
