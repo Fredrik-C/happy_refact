@@ -124,6 +124,7 @@ function extractSignatureInfo(node: Parser.SyntaxNode, langConfig: LanguageConfi
         }
     } else if (parserName === 'typescript') {
         const parametersNode = node.childForFieldName('parameters');
+        const methodNameNode = node.childForFieldName('name');
         if (methodNameNode && parametersNode) {
             const parameterTypes: string[] = [];
             for (const paramNode of parametersNode.namedChildren) {
