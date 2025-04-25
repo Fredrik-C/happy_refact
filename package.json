@@ -1,6 +1,6 @@
 {
   "name": "happy_refact",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -23,7 +23,7 @@
   "type": "module",
   "main": "index.js",
   "bin": {
-    "happy_refact": "build/index.js"
+    "happy_refact": "build/src/index.js"
   },
   "directories": {
     "test": "test"
@@ -32,10 +32,10 @@
     "build"
   ],
   "scripts": {
-    "build": "tsc && node -e \"require('fs').chmodSync('build/index.js', '755')\"",
+    "build": "tsc && node -e \"require('fs').chmodSync('build/src/index.js', '755')\"",
     "watch": "tsc --watch",
     "inspector": "npx @modelcontextprotocol/inspector build/index.js",
-    "test:mcp-client": "node build/run_mcp_test_client.js"
+    "test:mcp-client": "node build/test/run_mcp_test_client.js"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.10.2",

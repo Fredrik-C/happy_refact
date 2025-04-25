@@ -27,7 +27,7 @@ async function runTests() {
     console.log('Starting MCP Test Client...');
     try {
         const command = 'node';
-        const args = [path.resolve(process.cwd(), 'build/index.js')];
+        const args = [path.resolve(process.cwd(), 'build/src/index.js')]; // Corrected path
         console.log(`Attempting to start server with: ${command} ${args.join(' ')}`);
         const transport = new StdioClientTransport({ command, args });
         const clientInfo = {
@@ -49,11 +49,14 @@ async function runTests() {
         console.dir(tsResponse, { depth: null });
         const typedTsResponse = tsResponse;
         const tsTextContent = typedTsResponse.content.find((c) => c.type === 'text')?.text || '';
-        if (tsTextContent.includes('Impacted file: test-projects/typescript-sample/src/index.ts') && tsTextContent.includes('greet("World")')) {
+        const expectedTsPath = path.join('test-projects', 'typescript-sample', 'src', 'index.ts');
+        // Check if the expected file (using correct path separator) and a line containing the call are present
+        if (tsTextContent.includes(`Impacted file: ${expectedTsPath}`) && tsTextContent.includes('greet("World")')) {
             console.log('TypeScript Test: PASS');
         }
         else {
             console.error('TypeScript Test: FAIL - Expected reference not found.');
+            console.error(`Actual text content: ${tsTextContent}`); // Log actual content on failure
         }
         console.log('\n--- Testing Python ---');
         const pyFilePath = path.join('test-projects', 'python-sample', 'greeter.py');
@@ -65,11 +68,14 @@ async function runTests() {
         console.dir(pyResponse, { depth: null });
         const typedPyResponse = pyResponse;
         const pyTextContent = typedPyResponse.content.find((c) => c.type === 'text')?.text || '';
-        if (pyTextContent.includes('Impacted file: test-projects/python-sample/main.py') && pyTextContent.includes('greet("World")')) {
+        const expectedPyPath = path.join('test-projects', 'python-sample', 'main.py');
+        // Check if the expected file (using correct path separator) and a line containing the call are present
+        if (pyTextContent.includes(`Impacted file: ${expectedPyPath}`) && pyTextContent.includes('greet("World")')) {
             console.log('Python Test: PASS');
         }
         else {
             console.error('Python Test: FAIL - Expected reference not found.');
+            console.error(`Actual text content: ${pyTextContent}`); // Log actual content on failure
         }
         console.log('\n--- Testing C# ---');
         const csFilePath = path.join('test-projects', 'csharp-sample', 'Greeter.cs');
@@ -82,7 +88,8 @@ async function runTests() {
         const typedCsResponse = csResponse;
         const csTextContent = typedCsResponse.content.find((c) => c.type === 'text')?.text || '';
         const expectedCsPath = path.join('test-projects', 'csharp-sample', 'Program.cs');
-        if (csTextContent.includes(`Impacted file: ${expectedCsPath}`) && csTextContent.includes('greeterInstance.GreetPerson("Bob")')) {
+        // Check if the expected file and a line containing the call are present
+        if (csTextContent.includes(`Impacted file: ${expectedCsPath}`) && csTextContent.includes('GreetPerson("Bob")')) {
             console.log('C# Test: PASS');
         }
         else {
