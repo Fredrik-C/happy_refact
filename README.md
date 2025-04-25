@@ -2,6 +2,8 @@
 
 This MCP server provides the `show_impacted_code` tool to predict the impact of changes to code elements (methods, functions, classes, etc.) when modifying any function or method signature. Instruct AI agent to invoke this tool to identify which files and elements will be impacted, helping you pull the relevant code into context for AI-driven modifications. The end-to-end tests are performed by an MCP Client that communicates with this server over stdio.
 
+Example instruction: `BEFORE making any change to signature of a method/function ALWAYS use tool "show_impacted_code" to understand what other parts of the code that get impacted`
+
 ## Features
 
 ### Tools
@@ -12,6 +14,29 @@ This MCP server provides the `show_impacted_code` tool to predict the impact of 
     - `filePath` (required): The file path of the code element being modified, relative to the repository path.
     - `elementName` (required): The name of the code element (e.g., function name, method name, class name).
     - `elementType` (optional): The type of the code element (e.g., 'function', 'method', 'class').
+
+## Installation/Use
+
+To use this tool in IDEs like Claude, Cline, Cursor etc you add an MCP Server entry:
+
+```json
+"happy_refact": {
+    "command": "cmd",
+    "args": [
+        "/c",
+        "npx",
+        "-y",
+        "happy_refact"
+    ]
+}
+```
+Or 
+```json
+"happy_refact": {
+    "command": "npx",
+    "args": [ "-y happy_refact"]
+}
+```
 
 ## Development
 
@@ -48,34 +73,6 @@ node build/test/run_mcp_test_client.js
 ```
 
 This script runs the test client against the built MCP server (`build/index.js`) and reports PASS/FAIL for each test case across TypeScript, Python, and C# sample projects.
-
-## Installation
-
-I have not managed to get a publish version working, so for now you must download and build the source, then register:
-
-```json
-{
-  "mcpServers": {
-    "happy_refact": {
-      "command": "node",
-      "args": [
-        "path/build/index.js"
-      ]
-    }
-  }
-}
-```
-Replace `path/build/` with the actual path to your project directory.
-
-### Debugging
-
-Since MCP servers communicate over stdio, debugging can be challenging. We recommend using the [MCP Inspector](https://github.com/modelcontextprotocol/inspector), which is available as a package script:
-
-```bash
-npm run inspector
-```
-
-The Inspector will provide a URL to access debugging tools in your browser.
 
 ## License
 
