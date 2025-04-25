@@ -78,7 +78,7 @@ async function runTests() {
             console.error(`Actual text content: ${pyTextContent}`); // Log actual content on failure
         }
         console.log('\n--- Testing C# ---');
-        const csFilePath = path.join('test-projects', 'csharp-sample', 'Greeter.cs');
+        const csFilePath = path.join('test-projects', 'csharp-sample', 'SubFolder', 'Greeter.cs');
         const csElementName = 'GreetPerson';
         const csArgs = { repoPath, filePath: csFilePath, elementName: csElementName, elementType: 'method' };
         console.log('Calling show_impacted_code with args:', csArgs);

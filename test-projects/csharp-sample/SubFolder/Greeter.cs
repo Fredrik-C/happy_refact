@@ -1,4 +1,4 @@
-namespace CSharpSample
+namespace CSharpSample.SubFolder
 {
     public class Greeter
     {

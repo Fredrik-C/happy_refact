@@ -38,6 +38,13 @@ const TOOL_NAME = 'show_impacted_code';
 // Refined ignore patterns to be root-relative
 const IGNORE_PATTERNS = ['/.git', '/.env', '/.vs', '/build', '/node_modules', '*.d.ts', '/src/**', '/test/**'];
 
+// --- Caching ---
+// Cache to store directory listing results
+// Key: Absolute directory path
+// Value: Dirents and modification time
+const fileListCache = new Map<string, { dirents: fs.Dirent[], mtimeMs: number }>();
+// --- End Caching ---
+
 interface LanguageConfig {
     parser: any;
     referenceQuery: string;
@@ -53,8 +60,12 @@ interface Reference {
 }
 
 const parser = new Parser();
-
 let languageConfigs: Record<string, LanguageConfig>;
+let currentParserLanguage: any = null; // Cache for the currently set language
+const compiledQueryCache = new Map<string, Parser.Query>(); // Cache for compiled queries
+// Added referenceCache in the previous step, ensuring it's here.
+const referenceCache = new Map<string, { references: Reference[], mtimeMs: number }>(); // Cache for findReferencesInFile results
+
 
 
 
@@ -72,30 +83,55 @@ async function getGitignorePatterns(repoPath: string): Promise<string[]> {
     }
 }
 
+// --- Modified listFilesRecursively with Caching ---
 async function* listFilesRecursively(dir: string, repoPath: string, ig: ignore.Ignore): AsyncGenerator<string> {
+    let dirents: fs.Dirent[];
     try {
-        const dirents = await fsPromises.readdir(dir, { withFileTypes: true });
-        for (const dirent of dirents) {
-            const fullPath = path.join(dir, dirent.name);
-            // Calculate path relative to the repository root
-            const relativePath = path.relative(repoPath, fullPath);
-
-            if (ig.ignores(relativePath)) {
-                // console.error(`Ignoring: ${relativePath}`); // Optional debug log
-                continue;
-            }
-
-            if (dirent.isDirectory()) {
-                // Pass repoPath down recursively
-                yield* listFilesRecursively(fullPath, repoPath, ig);
-            } else {
-                yield fullPath;
-            }
+        const stats = await fsPromises.stat(dir);
+        if (!stats.isDirectory()) {
+            return; // Should not happen if called correctly, but good practice
         }
-    } catch (error) {
-        console.error(`Error reading directory ${dir}:`, error);
+
+        const cachedEntry = fileListCache.get(dir);
+
+        if (cachedEntry && cachedEntry.mtimeMs === stats.mtimeMs) {
+            // Cache hit and directory hasn't changed
+            dirents = cachedEntry.dirents;
+            // console.error(`Cache hit for: ${dir}`); // Optional debug log
+        } else {
+            // Cache miss or directory changed
+            // console.error(`Cache miss/stale for: ${dir}`); // Optional debug log
+            dirents = await fsPromises.readdir(dir, { withFileTypes: true });
+            fileListCache.set(dir, { dirents, mtimeMs: stats.mtimeMs });
+        }
+    } catch (error: any) {
+        // Handle errors during stat or readdir (e.g., permission denied)
+        if (error.code !== 'ENOENT') { // Ignore if directory simply doesn't exist
+             console.error(`Error accessing directory ${dir}:`, error);
+        }
+        return; // Stop iteration for this path if error occurs
+    }
+
+
+    for (const dirent of dirents) {
+        const fullPath = path.join(dir, dirent.name);
+        // Calculate path relative to the repository root
+        const relativePath = path.relative(repoPath, fullPath);
+
+        if (ig.ignores(relativePath)) {
+            // console.error(`Ignoring: ${relativePath}`); // Optional debug log
+            continue;
+        }
+
+        if (dirent.isDirectory()) {
+            // Pass repoPath down recursively
+            yield* listFilesRecursively(fullPath, repoPath, ig);
+        } else {
+            yield fullPath;
+        }
     }
 }
+// --- End Modified listFilesRecursively ---
 
 
 interface SignatureInfo {
@@ -267,23 +303,73 @@ async function findReferencesInFile(
     definitionSignature: SignatureInfo | null
 ): Promise<Reference[]> {
     const references: Reference[] = [];
-    let lines: string[] = []; // Define lines array outside try block
+    let lines: string[] = [];
+    let fileMtimeMs: number | undefined; // Declared here for wider scope
+
+    // --- Result Caching Check ---
     try {
+        const stats = await fsPromises.stat(filePath);
+        fileMtimeMs = stats.mtimeMs; // Assign mtime here if stat succeeds
+        const cachedEntry = referenceCache.get(filePath);
+
+        if (cachedEntry && cachedEntry.mtimeMs === fileMtimeMs) {
+            // Cache hit and file hasn't changed
+            // console.error(`Reference cache hit for: ${filePath}`); // Optional debug log
+            if (definitionSignature) {
+                 // console.error(`Bypassing reference cache due to signature check for: ${filePath}`);
+            } else {
+                 return cachedEntry.references; // Return cached result directly if no signature
+            }
+        }
+    } catch (statError: any) {
+        // Ignore stat errors (e.g., file not found), proceed without mtime or cache hit
+        if (statError.code !== 'ENOENT') {
+            console.error(`Error stating file for cache check ${filePath}:`, statError);
+        }
+    }
+    // --- End Result Caching Check ---
+
+    try {
+        // If fileMtimeMs wasn't set during cache check (e.g., stat error), try again or proceed without it
+        if (fileMtimeMs === undefined) {
+            try {
+                 const stats = await fsPromises.stat(filePath);
+                 fileMtimeMs = stats.mtimeMs;
+            } catch { /* Ignore stat error here, proceed without mtime for caching */ }
+        }
+
         const fileContent = await fsPromises.readFile(filePath, 'utf-8');
         lines = fileContent.split(/\r?\n/); // Split lines once
 
-        parser.setLanguage(langConfig.parser);
+        // Optimization: Only set language if it changed
+        if (currentParserLanguage !== langConfig.parser) {
+            parser.setLanguage(langConfig.parser);
+            currentParserLanguage = langConfig.parser; // Update cache
+        }
         const tree = parser.parse(fileContent);
 
         const queryString = langConfig.referenceQuery;
+        // Use language extension as cache key (assuming one ref query per lang)
+        const queryCacheKey = path.extname(filePath).toLowerCase();
 
         let allCaptures = [];
         try {
-            const query = new Parser.Query(langConfig.parser, queryString);
+            let query: Parser.Query;
+            // Optimization: Use cached query if available
+            if (compiledQueryCache.has(queryCacheKey)) {
+                query = compiledQueryCache.get(queryCacheKey)!;
+            } else {
+                // Compile query if not cached
+                query = new Parser.Query(langConfig.parser, queryString);
+                compiledQueryCache.set(queryCacheKey, query); // Cache it
+            }
+
+            // Execute the query (cached or new)
             allCaptures = query.captures(tree.rootNode);
-        } catch (error) {
-            console.error(`Query error for ${filePath}:`, error);
-            // Fallback logic remains the same, but capture lineText
+
+        } catch (error) { // Handles errors from new Parser.Query() or query.captures()
+            console.error(`Query error (compilation or execution) for ${filePath}:`, error);
+            // Fallback logic remains the same...
             const regex = new RegExp(`\\b${elementName}\\b`, 'i');
             lines.forEach((lineContent, index) => {
                 let match;
@@ -292,11 +378,17 @@ async function findReferencesInFile(
                         filePath: filePath,
                         line: index + 1,
                         column: match.index + 1,
-                        text: elementName, // Use element name as fallback text
-                        lineText: lineContent.trim(), // Capture line text
+                        text: elementName,
+                        lineText: lineContent.trim(),
                     });
                 }
             });
+            // --- Cache Fallback Result ---
+            // Cache fallback results only if no signature was involved and mtime is known.
+            if (definitionSignature === null && fileMtimeMs !== undefined) {
+                referenceCache.set(filePath, { references: [...references], mtimeMs: fileMtimeMs });
+            }
+            // --- End Cache Fallback Result ---
             return references;
         }
 
@@ -314,8 +406,8 @@ async function findReferencesInFile(
                     filePath: filePath,
                     line: startPosition.row + 1,
                     column: startPosition.column + 1,
-                    text: node.text, // Use the matched node's text
-                    lineText: lineText // Store the captured line text
+                    text: node.text,
+                    lineText: lineText
                 });
             }
         }
@@ -324,8 +416,8 @@ async function findReferencesInFile(
         console.error(`Element Name: ${elementName}`);
         console.error(`Query String Used: "${langConfig?.referenceQuery}"`);
         console.error(error);
-        // Ensure lineText is captured in fallback if primary fails after query creation
-         if (references.length === 0 && lines.length > 0) { // Add fallback if query worked but finding failed, and lines were read
+        // Fallback if primary processing fails after successful query execution/compilation attempt
+         if (references.length === 0 && lines.length > 0) {
              const regex = new RegExp(`\\b${elementName}\\b`, 'i');
              lines.forEach((lineContent, index) => {
                  let match;
