@@ -45,7 +45,6 @@ async function runTests() {
 
     const transport = new StdioClientTransport({ command, args });
 
-
     const clientInfo: Implementation = {
         name: 'happy-refact-test-client',
         version: '0.0.1',
@@ -55,7 +54,6 @@ async function runTests() {
     console.log('MCP Client instantiated. Connecting...');
     await client.connect(transport);
     console.log('Client connected.');
-
 
     const repoPath = process.cwd();
 
@@ -70,12 +68,11 @@ async function runTests() {
     const typedTsResponse = tsResponse as McpResponse;
     const tsTextContent = typedTsResponse.content.find((c: ContentPart) => c.type === 'text')?.text || '';
     const expectedTsPath = path.join('test-projects', 'typescript-sample', 'src', 'index.ts');
-    // Check if the expected file (using correct path separator) and a line containing the call are present
     if (tsTextContent.includes(`Impacted file: ${expectedTsPath}`) && tsTextContent.includes('greet("World")')) {
       console.log('TypeScript Test: PASS');
     } else {
       console.error('TypeScript Test: FAIL - Expected reference not found.');
-      console.error(`Actual text content: ${tsTextContent}`); // Log actual content on failure
+      console.error(`Actual text content: ${tsTextContent}`);
     }
 
     console.log('\n--- Testing Python ---');
@@ -89,16 +86,15 @@ async function runTests() {
     const typedPyResponse = pyResponse as McpResponse;
     const pyTextContent = typedPyResponse.content.find((c: ContentPart) => c.type === 'text')?.text || '';
     const expectedPyPath = path.join('test-projects', 'python-sample', 'main.py');
-    // Check if the expected file (using correct path separator) and a line containing the call are present
     if (pyTextContent.includes(`Impacted file: ${expectedPyPath}`) && pyTextContent.includes('greet("World")')) {
       console.log('Python Test: PASS');
     } else {
       console.error('Python Test: FAIL - Expected reference not found.');
-      console.error(`Actual text content: ${pyTextContent}`); // Log actual content on failure
+      console.error(`Actual text content: ${pyTextContent}`);
     }
 
     console.log('\n--- Testing C# ---');
-    const csFilePath = path.join('test-projects', 'csharp-sample', 'SubFolder','Greeter.cs');
+    const csFilePath = path.join('test-projects', 'csharp-sample', 'SubFolder', 'Greeter.cs');
     const csElementName = 'GreetPerson';
     const csArgs = { repoPath, filePath: csFilePath, elementName: csElementName, elementType: 'method' };
     console.log('Calling show_impacted_code with args:', csArgs);
@@ -108,12 +104,37 @@ async function runTests() {
     const typedCsResponse = csResponse as McpResponse;
     const csTextContent = typedCsResponse.content.find((c: ContentPart) => c.type === 'text')?.text || '';
     const expectedCsPath = path.join('test-projects', 'csharp-sample', 'Program.cs');
-    // Check if the expected file and a line containing the call are present
     if (csTextContent.includes(`Impacted file: ${expectedCsPath}`) && csTextContent.includes('GreetPerson("Bob")')) {
       console.log('C# Test: PASS');
     } else {
       console.error(`C# Test: FAIL - Expected reference not found in ${expectedCsPath}.`);
       console.error(`Actual text content: ${csTextContent}`);
+    }
+
+    // New test for large repo
+    console.log('\n--- Testing Large Repo ---');
+    const largeRepoArgs = {
+      repoPath: "c:/git/vt/dfp-productmaster",
+      filePath: "system/api/VT.ProductMaster.Domain/Queries/Handlers/AllAreasHandler.cs",
+      elementName: "HandleAsync",
+      elementType: "method"
+    };
+    console.log('Calling show_impacted_code with args:', largeRepoArgs);
+    try {
+      const largeRepoResponse = await client.callTool({ name: 'show_impacted_code', arguments: largeRepoArgs });
+      console.log('Response received for large repo:');
+      console.dir(largeRepoResponse, { depth: null });
+      const typedLargeRepoResponse = largeRepoResponse as McpResponse;
+      const largeRepoTextContent = typedLargeRepoResponse.content.find((c: ContentPart) => c.type === 'text')?.text || '';
+      if (largeRepoTextContent.includes('Analysis timed out')) {
+        console.log('Large Repo Test: PASS - Timeout handled as expected.');
+      } else {
+        console.error('Large Repo Test: FAIL - Did not timeout as expected.');
+        console.error(`Actual text content: ${largeRepoTextContent}`);
+      }
+    } catch (error) {
+      console.error('Large Repo Test: Error occurred, which is expected due to timeout.');
+      console.error(error);
     }
 
   } catch (error) {
