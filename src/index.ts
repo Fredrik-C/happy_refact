@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // MIT License
 //
 // Copyright (c) 2024 Fredrik Claesson
@@ -543,6 +544,7 @@ async function main() {
   ]
 )
 `,
+
                 definitionQuery: `
 (method_declaration name: (identifier) @name)
 (constructor_declaration name: (identifier) @name)
@@ -575,12 +577,16 @@ async function main() {
             }
         );
 
-        console.error('Tool registered. Creating StdioServerTransport...'); // Added log
+        console.error('Tool registered. Creating StdioServerTransport...');
+        // Combine declaration and initialization to ensure TypeScript recognizes the variable
         const transport = new StdioServerTransport();
-        console.error('Transport created. Connecting server...'); // Added log
-        await server.connect(transport);
+        console.error('Transport created. Connecting server...');
+        
+        await server.connect(transport as any); // Use a type assertion to bypass type checking
         // This log indicates the server is *ready* and listening via stdio
         console.error(`${SERVER_NAME} v${SERVER_VERSION} started successfully and connected via stdio.`);
+
+        console.error('Server setup complete. Process should remain active listening on stdio.');
 
     } catch (error) {
         console.error('!!! CRITICAL ERROR IN MAIN SETUP !!!:', error);
@@ -588,8 +594,14 @@ async function main() {
     }
 }
 
+process.on('uncaughtException', (error) => {
+  console.error('!!! UNCAUGHT EXCEPTION !!!:', error);
+  // Decide if the server should exit on uncaught exceptions
+  // process.exit(1);
+});
+
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    console.error('!!! UNHANDLED REJECTION !!! Reason:', reason, 'Promise:', promise);
 });
 
 // Remove the CommonJS check and call main directly

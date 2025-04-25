@@ -1,23 +1,18 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
-    "module": "ES2020",
-    "moduleResolution": "Node",
+    "target": "ES2022",
+    "lib": ["ES2022"], // Explicitly set lib to exclude DOM
+    "module": "Node16", // Match example
+    "moduleResolution": "Node16", // Match example
     "esModuleInterop": true,
-    "allowSyntheticDefaultImports": true,
     "strict": true,
     "forceConsistentCasingInFileNames": true,
     "skipLibCheck": true,
     "outDir": "build",
     "rootDir": ".",
     "resolveJsonModule": true,
-    "isolatedModules": true,
-    "noEmit": false,
-    "types": ["node", "jest"],
-    "baseUrl": ".", // Required for paths
-    "paths": {
-      "@modelcontextprotocol/sdk/*": ["node_modules/@modelcontextprotocol/sdk/dist/esm/*"]
-    }
+    "types": ["node"],
+    "typeRoots": ["./node_modules/@types", "./src/@types"] // Explicitly define type roots
   },
   "include": ["src", "test"],
   "exclude": ["node_modules", "build"]
