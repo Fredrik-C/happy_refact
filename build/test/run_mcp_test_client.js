@@ -93,32 +93,59 @@ async function runTests() {
             console.error(`C# Test: FAIL - Expected reference not found in ${expectedCsPath}.`);
             console.error(`Actual text content: ${csTextContent}`);
         }
-        // New test for large repo
-        console.log('\n--- Testing Large Repo ---');
-        const largeRepoArgs = {
-            repoPath: "c:/git/vt/dfp-productmaster",
-            filePath: "system/api/VT.ProductMaster.Domain/Queries/Handlers/AllAreasHandler.cs",
-            elementName: "HandleAsync",
-            elementType: "method"
-        };
-        console.log('Calling show_impacted_code with args:', largeRepoArgs);
-        try {
-            const largeRepoResponse = await client.callTool({ name: 'show_impacted_code', arguments: largeRepoArgs });
-            console.log('Response received for large repo:');
-            console.dir(largeRepoResponse, { depth: null });
-            const typedLargeRepoResponse = largeRepoResponse;
-            const largeRepoTextContent = typedLargeRepoResponse.content.find((c) => c.type === 'text')?.text || '';
-            if (largeRepoTextContent.includes('Analysis timed out')) {
-                console.log('Large Repo Test: PASS - Timeout handled as expected.');
-            }
-            else {
-                console.error('Large Repo Test: FAIL - Did not timeout as expected.');
-                console.error(`Actual text content: ${largeRepoTextContent}`);
-            }
+        // --- Testing Red Herrings ---
+        console.log('\n--- Testing TypeScript Red Herring ---');
+        const tsRhFilePath = path.join('test-projects', 'typescript-sample', 'src', 'redherring.ts');
+        const tsRhElementName = 'greetPerson'; // Assuming this is the red herring function
+        const tsRhArgs = { repoPath, filePath: tsRhFilePath, elementName: tsRhElementName, elementType: 'function' };
+        console.log('Calling show_impacted_code with args:', tsRhArgs);
+        const tsRhResponse = await client.callTool({ name: 'show_impacted_code', arguments: tsRhArgs });
+        console.log('Response received:');
+        console.dir(tsRhResponse, { depth: null });
+        const typedTsRhResponse = tsRhResponse;
+        const tsRhTextContent = typedTsRhResponse.content.find((c) => c.type === 'text')?.text || '';
+        if (!tsRhTextContent.includes('Impacted file:')) {
+            console.log('TypeScript Red Herring Test: PASS - No impacted files found as expected.');
         }
-        catch (error) {
-            console.error('Large Repo Test: Error occurred, which is expected due to timeout.');
-            console.error(error);
+        else {
+            console.error('TypeScript Red Herring Test: FAIL - Unexpected impacted files found.');
+            console.error(`Actual text content: ${tsRhTextContent}`);
+        }
+        console.log('\n--- Testing Python Red Herring ---');
+        const pyRhFilePath = path.join('test-projects', 'python-sample', 'redherring.py');
+        const pyRhElementName = 'greet_person'; // Assuming this is the red herring function
+        const pyRhArgs = { repoPath, filePath: pyRhFilePath, elementName: pyRhElementName, elementType: 'function' };
+        console.log('Calling show_impacted_code with args:', pyRhArgs);
+        const pyRhResponse = await client.callTool({ name: 'show_impacted_code', arguments: pyRhArgs });
+        console.log('Response received:');
+        console.dir(pyRhResponse, { depth: null });
+        const typedPyRhResponse = pyRhResponse;
+        const pyRhTextContent = typedPyRhResponse.content.find((c) => c.type === 'text')?.text || '';
+        if (!pyRhTextContent.includes('Impacted file:')) {
+            console.log('Python Red Herring Test: PASS - No impacted files found as expected.');
+        }
+        else {
+            console.error('Python Red Herring Test: FAIL - Unexpected impacted files found.');
+            console.error(`Actual text content: ${pyRhTextContent}`);
+        }
+        console.log('\n--- Testing C# Red Herring ---');
+        const csRhFilePath = path.join('test-projects', 'csharp-sample', 'SubFolder', 'RedHerring.cs');
+        // Reverting to test GreetPerson - the fix in src/index.ts should handle this correctly now
+        const csRhElementName = 'GreetPerson';
+        const csRhArgs = { repoPath, filePath: csRhFilePath, elementName: csRhElementName, elementType: 'method' };
+        console.log('Calling show_impacted_code with args:', csRhArgs);
+        const csRhResponse = await client.callTool({ name: 'show_impacted_code', arguments: csRhArgs });
+        console.log('Response received:');
+        console.dir(csRhResponse, { depth: null });
+        const typedCsRhResponse = csRhResponse;
+        const csRhTextContent = typedCsRhResponse.content.find((c) => c.type === 'text')?.text || '';
+        // Expecting no impacted files for this unique, unused method
+        if (!csRhTextContent.includes('Impacted file:')) {
+            console.log('C# Red Herring Test: PASS - No impacted files found as expected.');
+        }
+        else {
+            console.error('C# Red Herring Test: FAIL - Unexpected impacted files found.');
+            console.error(`Actual text content: ${csRhTextContent}`);
         }
     }
     catch (error) {

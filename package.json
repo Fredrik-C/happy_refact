@@ -1,6 +1,6 @@
 {
   "name": "happy_refact",
-  "version": "0.2.4",
+  "version": "0.2.5",
   "private": false,
   "publishConfig": {
     "access": "public"
@@ -49,6 +49,7 @@
   "devDependencies": {
     "@types/jest": "^29.5.14",
     "@types/node": "^20.17.30",
+    "ts-node": "^10.9.2",
     "typescript": "^5.3.3"
   },
   "moduleNameMapper": {
