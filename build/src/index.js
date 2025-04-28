@@ -53,10 +53,10 @@ const IGNORE_PATTERNS = [
 ];
 // Analysis limits to prevent excessive resource usage
 const ANALYSIS_LIMITS = {
-    TIMEOUT_MS: 10000, // 10 seconds timeout
+    TIMEOUT_MS: 15000, // 15 seconds timeout
     MAX_FILES: 20000, // Maximum files to scan
     MATCH_LIMIT: 50, // Maximum matches to collect
-    NO_MATCH_LIMIT: 10000 // Stop early if many files have no matches
+    NO_MATCH_LIMIT: 20000 // Stop early if many files have no matches
 };
 // Schema for the show_impacted_code tool parameters
 const showImpactedCodeSchema = z.object({
@@ -69,18 +69,6 @@ const showImpactedCodeSchema = z.object({
 // ===== Global state =====
 // Tree-sitter parser instance
 const parser = new Parser();
-// Language configurations for supported languages
-let languageConfigs;
-// Cache for the currently set language in the parser
-let currentParserLanguage = null;
-// Cache for compiled tree-sitter queries
-const compiledQueryCache = new Map();
-// Cache for directory listing results
-// Key: Absolute directory path
-// Value: Dirents and modification time
-const fileListCache = new Map();
-// Cache for findReferencesInFile results
-const referenceCache = new Map();
 // ===== Helper functions =====
 /**
  * Gets patterns from .gitignore file if it exists
@@ -117,14 +105,7 @@ async function* listFilesRecursively(dir, repoPath, ig) {
         if (!stats.isDirectory()) {
             return;
         }
-        const cachedEntry = fileListCache.get(dir);
-        if (cachedEntry && cachedEntry.mtimeMs === stats.mtimeMs) {
-            dirents = cachedEntry.dirents;
-        }
-        else {
-            dirents = await fsPromises.readdir(dir, { withFileTypes: true });
-            fileListCache.set(dir, { dirents, mtimeMs: stats.mtimeMs });
-        }
+        dirents = await fsPromises.readdir(dir, { withFileTypes: true });
     }
     catch (error) {
         if (error.code !== 'ENOENT') {
@@ -337,10 +318,7 @@ async function getDefinitionClassName(definitionFilePath, elementName, langConfi
     try {
         const fileContent = await fsPromises.readFile(definitionFilePath, 'utf-8');
         // Set the correct parser language
-        if (currentParserLanguage !== langConfig.parser) {
-            parser.setLanguage(langConfig.parser);
-            currentParserLanguage = langConfig.parser;
-        }
+        parser.setLanguage(langConfig.parser);
         const tree = parser.parse(fileContent);
         const fileExtension = path.extname(definitionFilePath).toLowerCase();
         // Create language-specific query
@@ -426,41 +404,14 @@ async function findReferencesInFile(filePath, elementName, langConfig, definitio
     let lines = [];
     let fileMtimeMs;
     const isCSharp = path.extname(filePath).toLowerCase() === '.cs';
-    // Check cache first
-    try {
-        const stats = await fsPromises.stat(filePath);
-        fileMtimeMs = stats.mtimeMs;
-        const cachedEntry = referenceCache.get(filePath);
-        // Use cache only if we're not filtering by signature or class name
-        if (cachedEntry &&
-            cachedEntry.mtimeMs === fileMtimeMs &&
-            !definitionSignature &&
-            !definitionClassName) {
-            return cachedEntry.references;
-        }
-    }
-    catch {
-        // Ignore file stat errors
-    }
     try {
         const fileContent = await fsPromises.readFile(filePath, 'utf-8');
         lines = fileContent.split(/\r?\n/);
         // Set the correct parser language
-        if (currentParserLanguage !== langConfig.parser) {
-            parser.setLanguage(langConfig.parser);
-            currentParserLanguage = langConfig.parser;
-        }
+        parser.setLanguage(langConfig.parser);
         const tree = parser.parse(fileContent);
         // Get or compile the query
-        let query;
-        const queryCacheKey = path.extname(filePath).toLowerCase();
-        if (compiledQueryCache.has(queryCacheKey)) {
-            query = compiledQueryCache.get(queryCacheKey);
-        }
-        else {
-            query = new Parser.Query(langConfig.parser, langConfig.referenceQuery);
-            compiledQueryCache.set(queryCacheKey, query);
-        }
+        const query = new Parser.Query(langConfig.parser, langConfig.referenceQuery);
         // Find matches for the element name
         const matches = query.captures(tree.rootNode)
             .filter(capture => capture.name === 'ref' && capture.node.text === elementName);
@@ -518,10 +469,6 @@ async function findReferencesInFile(filePath, elementName, langConfig, definitio
                 });
             }
         }
-        // Update cache if not filtering
-        if (fileMtimeMs !== undefined && !definitionSignature && !definitionClassName) {
-            referenceCache.set(filePath, { references, mtimeMs: fileMtimeMs });
-        }
     }
     catch (error) {
         console.error(`Error processing file ${filePath}:`, error);
@@ -529,17 +476,24 @@ async function findReferencesInFile(filePath, elementName, langConfig, definitio
         try {
             const fileContent = await fsPromises.readFile(filePath, 'utf-8');
             const lines = fileContent.split(/\r?\n/);
-            const regex = new RegExp(`\\b${elementName}\\b`);
+            const regex = new RegExp(`\\b${elementName}\\b`, 'g'); // Use 'g' flag for match to find all occurrences
             lines.forEach((lineContent, index) => {
-                let match;
-                while ((match = regex.exec(lineContent)) !== null) {
-                    references.push({
-                        filePath,
-                        line: index + 1,
-                        column: match.index + 1,
-                        text: elementName,
-                        lineText: lineContent.trim()
-                    });
+                const matches = lineContent.match(regex);
+                if (matches) {
+                    let currentColumn = 0;
+                    for (const match of matches) {
+                        const matchIndex = lineContent.indexOf(match, currentColumn);
+                        if (matchIndex !== -1) {
+                            references.push({
+                                filePath,
+                                line: index + 1,
+                                column: matchIndex + 1,
+                                text: match, // Use match text instead of elementName
+                                lineText: lineContent.trim()
+                            });
+                            currentColumn = matchIndex + match.length;
+                        }
+                    }
                 }
             });
         }
@@ -579,10 +533,10 @@ function formatPartialResults(references, filesAnalyzed, repoPath) {
 /**
  * Main function to find code impacted by changes to an element
  * @param args Parameters for the analysis
- * @param initializedLanguageConfigs Language configurations
+ * @param languageConfigs Language configurations
  * @returns Array of formatted output strings
  */
-async function _findImpactedCode(args, initializedLanguageConfigs) {
+async function _findImpactedCode(args, languageConfigs) {
     // Special case: RedHerring files should return no impacts
     const sourceFileName = path.basename(args.filePath);
     if (sourceFileName.toLowerCase().includes('redherring')) {
@@ -599,7 +553,7 @@ async function _findImpactedCode(args, initializedLanguageConfigs) {
     const allImpactedReferences = [];
     // Get language-specific information
     const definitionFileExt = path.extname(definitionFilePathAbsolute).toLowerCase();
-    const definitionLangConfig = initializedLanguageConfigs[definitionFileExt];
+    const definitionLangConfig = languageConfigs[definitionFileExt];
     // Get class name for C# methods
     let definitionClassName = null;
     if (definitionLangConfig && definitionFileExt === '.cs') {
@@ -610,22 +564,11 @@ async function _findImpactedCode(args, initializedLanguageConfigs) {
     if (definitionLangConfig && definitionLangConfig.definitionQuery) {
         try {
             // Set the correct parser language
-            if (currentParserLanguage !== definitionLangConfig.parser) {
-                parser.setLanguage(definitionLangConfig.parser);
-                currentParserLanguage = definitionLangConfig.parser;
-            }
+            parser.setLanguage(definitionLangConfig.parser);
             const definitionFileContent = await fsPromises.readFile(definitionFilePathAbsolute, 'utf-8');
             const definitionTree = parser.parse(definitionFileContent);
             // Get or compile the definition query
-            let defQuery;
-            const defQueryCacheKey = `${definitionFileExt}-def`;
-            if (compiledQueryCache.has(defQueryCacheKey)) {
-                defQuery = compiledQueryCache.get(defQueryCacheKey);
-            }
-            else {
-                defQuery = new Parser.Query(definitionLangConfig.parser, definitionLangConfig.definitionQuery);
-                compiledQueryCache.set(defQueryCacheKey, defQuery);
-            }
+            const defQuery = new Parser.Query(definitionLangConfig.parser, definitionLangConfig.definitionQuery);
             // Find the definition
             const definitionMatches = defQuery.captures(definitionTree.rootNode)
                 .filter(capture => (capture.name === 'name' || capture.name === 'element_name') &&
@@ -656,7 +599,7 @@ async function _findImpactedCode(args, initializedLanguageConfigs) {
             }
             // Check if we have a parser for this file type
             const ext = path.extname(file).toLowerCase();
-            const langConfig = initializedLanguageConfigs[ext];
+            const langConfig = languageConfigs[ext];
             if (langConfig) {
                 // Find references in this file
                 const fileReferences = await findReferencesInFile(file, elementName, langConfig, definitionSignature, definitionClassName);
@@ -709,7 +652,7 @@ async function main() {
         console.error('Project root:', projectRoot);
         // Initialize language parsers
         console.error('Loading language parsers...');
-        languageConfigs = {};
+        const languageConfigs = {};
         try {
             console.error('Loading TypeScript parser...');
             languageConfigs['.ts'] = {
